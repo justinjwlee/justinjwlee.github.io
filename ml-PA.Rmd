@@ -1,0 +1,56 @@
+Classification of barbell lifts on 5 different quality levels 
+========================================================
+
+# Synopsis
+
+The goal of the report is to predict how well a group of 6 participants had performed a barbell lift. The data were collected from accelerometers on the belt, forearm, arm and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. ('A' 'B' 'C' 'D' 'E' indicated under the 'classe' variable)
+
+The training and test data for this project was downloaded from [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) and [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) respectively on 18 June 2014, 04:46am (UTC).
+
+# Preprocessing
+
+## Feature Selection
+- All empty values and irrelevant values are replaced with NA.
+- All variables with more than about 95% of samples (18600) being NA are removed.
+- All descriptive variables (X, user name, new window, num window) with no bearing on the outcome of prediction are removed.
+- Final processed data is named 'training'
+
+```{r featureSelection, cache=TRUE}
+rawData <- read.csv("pml-training.csv", na.strings = c('NA', '', '#DIV/0!'))
+totalNAs <- apply(rawData,2,function(x) {sum(is.na(x))})
+reducedTraining <- rawData[,-which(totalNAs > 18600)]
+training <- reducedTraining[,-grep("timestamp|X|user_name|new_window|num_window",names(reducedTraining))]
+```
+
+## Data Splitting
+- the training data is split into 70% (train) and 30% (crossValidation)
+
+```{r dataSplitting, cache=TRUE}
+library(caret)
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+train <- training[inTrain,]
+crossValidation <- training[-inTrain,]
+```
+
+The final processed training set (train) contains `r nrow(train)` observations and  `r length(train)` variables
+
+# Training
+- The training data set is trained using Random Forest, with training control method set as 4-fold cross validation instead of default bootstrap sampling  
+_decision was made to reduce computation time: current computation time is ~20min_
+```{r training, cache=TRUE}
+set.seed(1234)
+library(caret)
+modFit <- train(classe~., data=train, method = "rf", prox=TRUE, 
+                trControl = trainControl(method = "cv",number = 4,
+                                         allowParallel=T))
+```
+
+# Out of sample error
+- The out of sample error was calculated using the cross validation (crossValidation) sample size of 5885 observations
+- The out of sample error of the model is about 0.8% (1 - 0.992)
+- Class A (exactly according to specification) was understandably most commonly misclassified as Class B (throwing elbows to the front)
+```{r oobError, cache=TRUE}
+set.seed(1234)
+library(caret)
+confusionMatrix(crossValidation$classe, predict(modFit, crossValidation))
+```
